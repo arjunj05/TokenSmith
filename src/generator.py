@@ -120,7 +120,7 @@ def get_system_prompt(mode="tutor"):
     return prompts.get(mode)
 
 
-def format_prompt(chunks, query, max_chunk_chars=400, system_prompt_mode="tutor"):
+def format_prompt(chunks, query, max_chunk_chars=400, system_prompt_mode="tutor", history=None):
     """
     Format prompt for LLM with chunks and query.
     
@@ -135,6 +135,26 @@ def format_prompt(chunks, query, max_chunk_chars=400, system_prompt_mode="tutor"
     system_section = f"<|im_start|>system\n{system_prompt}\n<|im_end|>\n" if system_prompt else ""
     
     # Build prompt based on whether chunks are provided
+    # Normalize history into a short textual block when provided
+    hist_section = ""
+    if history:
+        # history expected to be a list of (user, assistant) pairs or dicts
+        try:
+            parts = []
+            for h in history[-5:]:
+                if isinstance(h, dict):
+                    u = h.get('user','').strip()
+                    a = h.get('assistant','').strip()
+                else:
+                    u, a = h
+                if u:
+                    parts.append(f"User: {u}")
+                if a:
+                    parts.append(f"Assistant: {a}")
+            hist_section = "Conversation history:\n" + "\n".join(parts) + "\n\n"
+        except Exception:
+            hist_section = ""
+
     if chunks and len(chunks) > 0:
         trimmed = [(c or "")[:max_chunk_chars] for c in chunks]
         context = "\n\n".join(trimmed)
@@ -142,10 +162,10 @@ def format_prompt(chunks, query, max_chunk_chars=400, system_prompt_mode="tutor"
         
         # Build prompt with chunks
         context_section = f"Textbook Excerpts:\n{context}\n\n\n"
-        
+
         return textwrap.dedent(f"""\
             {system_section}<|im_start|>user
-            {context_section}Question: {query}
+            {hist_section}{context_section}Question: {query}
             <|im_end|>
             <|im_start|>assistant
             {ANSWER_START}
@@ -153,10 +173,9 @@ def format_prompt(chunks, query, max_chunk_chars=400, system_prompt_mode="tutor"
     else:
         # Build prompt without chunks
         question_label = "Question: " if system_prompt else ""
-        
         return textwrap.dedent(f"""\
             {system_section}<|im_start|>user
-            {question_label}{query}
+            {hist_section}{question_label}{query}
             <|im_end|>
             <|im_start|>assistant
             {ANSWER_START}
@@ -197,12 +216,25 @@ def run_llama_cpp(prompt: str, model_path: str, max_tokens: int = 300,
     proc = subprocess.Popen(
         cmd,
         stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL, # suppress performance and cleanup logging. TODO: genuine error handling.
+        stderr=subprocess.PIPE,  # capture stderr so we can show helpful errors
         text=True,
         env={**os.environ, "GGML_LOG_LEVEL": "ERROR", "LLAMA_LOG_LEVEL": "ERROR"},
     )
-    out, _ = proc.communicate()
-    return _extract_answer(out or "")
+    out, err = proc.communicate()
+
+    # If the process failed, surface stderr to the caller for diagnosis
+    if proc.returncode != 0:
+        raise RuntimeError(
+            "llama-cli failed with exit code {}:\n{}".format(proc.returncode, err.strip() or out.strip())
+        )
+
+    # If stdout is empty, include stderr for debugging (some binaries print useful info to stderr)
+    if not out or ANSWER_START not in out:
+        # Prefer stderr if present, else show raw stdout
+        diagnostic = err.strip() or out.strip() or "(no output captured)"
+        raise RuntimeError(f"llama-cli produced no parseable output. Diagnostic:\n{diagnostic}")
+
+    return _extract_answer(out)
 
 def _dedupe_sentences(text: str) -> str:
     sents = [s.strip() for s in re.split(r'(?<=[.!?])\s+', text) if s.strip()]
@@ -220,8 +252,9 @@ def answer(query: str, chunks, model_path: str, max_tokens: int = 300, **kw):
     return _dedupe_sentences(raw)
 
 def answer(query: str, chunks, model_path: str, max_tokens: int = 300, 
-           system_prompt_mode: str = "tutor", **kw):
-    prompt = format_prompt(chunks, query, system_prompt_mode=system_prompt_mode)
+        system_prompt_mode: str = "tutor", history=None, **kw):
+    # Pass optional conversation history into the prompt formatter
+    prompt = format_prompt(chunks, query, system_prompt_mode=system_prompt_mode, history=history)
     # approx_tokens = max(1, len(prompt) // 4)
     #print(f"\n⚙️  Prompt length ≈ {approx_tokens} tokens (mode: {system_prompt_mode})\n")
     raw = run_llama_cpp(prompt, model_path, max_tokens=max_tokens, **kw)

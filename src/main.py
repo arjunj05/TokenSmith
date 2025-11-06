@@ -48,6 +48,11 @@ def parse_args() -> argparse.Namespace:
         default="baseline",
         help="system prompt mode (choices: baseline, tutor, concise, detailed)"
     )
+    parser.add_argument(
+        "--no-history",
+        action="store_true",
+        help="disable conversation history during chat sessions (default: history enabled)"
+    )
     
     # Indexing-specific arguments
     indexing_group = parser.add_argument_group("indexing options")
@@ -136,6 +141,7 @@ def get_answer(
     logger: "RunLogger",
     artifacts: Optional[Dict] = None,
     golden_chunks: Optional[list] = None,
+    history: Optional[list] = None,
     is_test_mode: bool = False
 ) -> str:
     """
@@ -175,8 +181,31 @@ def get_answer(
         # Step 1: Retrieval
         pool_n = max(cfg.pool_size, cfg.top_k + 10)
         raw_scores: Dict[str, Dict[int, float]] = {}
+        # If conversation history is provided, prepend it to the question_for_retrieval
+        # so that retrieval can use prior turns as disambiguating context.
+        if history:
+            # build a short textual history block
+            try:
+                hist_parts = []
+                for h in history[-5:]:
+                    if isinstance(h, dict):
+                        u = h.get('user','').strip()
+                        a = h.get('assistant','').strip()
+                    else:
+                        u, a = h
+                    if u:
+                        hist_parts.append(f"User: {u}")
+                    if a:
+                        hist_parts.append(f"Assistant: {a}")
+                hist_text = " ".join(hist_parts)
+                question_for_retrieval = hist_text + " \nFollowup: " + question
+            except Exception:
+                question_for_retrieval = question
+        else:
+            question_for_retrieval = question
+
         for retriever in retrievers:
-            raw_scores[retriever.name] = retriever.get_scores(retrieval_query, pool_n, chunks)
+            raw_scores[retriever.name] = retriever.get_scores(question_for_retrieval, pool_n, chunks)
         # TODO: Fix retrieval logging.
         
         # Step 2: Ranking
@@ -218,11 +247,12 @@ def get_answer(
     model_path = args.model_path or cfg.model_path
     system_prompt = args.system_prompt_mode or cfg.system_prompt_mode
     ans = answer(
-        question, 
-        ranked_chunks, 
-        model_path, 
-        max_tokens=cfg.max_gen_tokens, 
-        system_prompt_mode=system_prompt
+        question,
+        ranked_chunks,
+        model_path,
+        max_tokens=cfg.max_gen_tokens,
+        system_prompt_mode=system_prompt,
+        history=history,
     )
     
     if is_test_mode:
@@ -283,6 +313,10 @@ def run_chat_session(args: argparse.Namespace, cfg: QueryPlanConfig):
 
     print("Initialization complete. You can start asking questions!")
     print("Type 'exit' or 'quit' to end the session.")
+    # Maintain a small per-session conversation history (list of dicts: {'user':..., 'assistant':...})
+    history = []
+    HISTORY_MAX = 5
+
     while True:
         try:
             q = input("\nAsk > ").strip()
@@ -292,24 +326,38 @@ def run_chat_session(args: argparse.Namespace, cfg: QueryPlanConfig):
                 print("Goodbye!")
                 break
 
-            # Use the single query function
-            ans = get_answer(q, cfg, args, logger=logger,artifacts=artifacts)
+            # Use the single query function (pass conversation history unless disabled)
+            ans = get_answer(q, cfg, args, logger=logger, artifacts=artifacts, history=(None if args.no_history else history))
 
             print("\n=================== START OF ANSWER ===================")
             print(ans.strip() if ans and ans.strip() else "(No output from model)")
             print("\n==================== END OF ANSWER ====================")
             logger.log_generation(ans, {"max_tokens": cfg.max_gen_tokens, "model_path": args.model_path or cfg.model_path})
+            # Append to history and trim to HISTORY_MAX unless disabled
+            try:
+                if not args.no_history:
+                    history.append({'user': q, 'assistant': ans or ''})
+                    if len(history) > HISTORY_MAX:
+                        history = history[-HISTORY_MAX:]
+            except Exception:
+                pass
+            # finalize per-query logging (writes the current_query_data to the session log)
+            logger.log_query_complete()
 
         except KeyboardInterrupt:
             print("\nGoodbye!")
             break
         except Exception as e:
             print(f"\nAn unexpected error occurred: {e}")
-            logger.log_error(str(e))
+            # record the exception object so RunLogger can include type/message/context
+            try:
+                logger.log_error(e)
+            except Exception:
+                # fallback if logger isn't available or errors when logging
+                pass
             break
 
-    # TODO: Fix completion logging.
-    # logger.log_query_complete()
+    # NOTE: per-query completion is written after each successful generation inside the loop
 
 
 def main():
