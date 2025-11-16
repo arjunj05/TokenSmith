@@ -5,6 +5,7 @@ channels:
 
 dependencies:
   - python=3.12
+  - faiss-cpu
   - pip
   - cmake
   - ninja
@@ -16,7 +17,6 @@ dependencies:
   - pip:
     - llama-cpp-python  # Needs CMAKE_ARGS for Metal/CUDA
     - pymupdf
-    - faiss-cpu
     - pyyaml
     - tqdm
     - nltk

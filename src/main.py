@@ -12,6 +12,7 @@ from src.ranking.ranker import EnsembleRanker
 from src.preprocessing.chunking import DocumentChunker
 from src.retriever import apply_seg_filter, BM25Retriever, FAISSRetriever, load_artifacts
 from src.query_enhancement import generate_hypothetical_document
+from src.preprocessing.query import preprocess_query, build_vocab_from_chunks
 
 
 def parse_args() -> argparse.Namespace:
@@ -52,6 +53,12 @@ def parse_args() -> argparse.Namespace:
         "--no-history",
         action="store_true",
         help="disable conversation history during chat sessions (default: history enabled)"
+    )
+    parser.add_argument(
+        "--preproc",
+        choices=["none", "light", "spell"],
+        default="none",
+        help="query preprocessing mode to apply before retrieval (default: none)"
     )
     
     # Indexing-specific arguments
@@ -204,6 +211,27 @@ def get_answer(
         else:
             question_for_retrieval = question
 
+        # Apply optional preprocessing to the text used for retrieval only.
+        preproc_mode = getattr(args, "preproc", "none")
+        vocab = None
+        try:
+            if artifacts is not None:
+                vocab = artifacts.get("vocab")
+        except Exception:
+            vocab = None
+        if preproc_mode and preproc_mode != "none":
+            try:
+                question_for_retrieval = preprocess_query(question_for_retrieval, mode=preproc_mode, vocab=vocab)
+            except Exception:
+                # If preprocessing fails for any reason, fallback to original retrieval string
+                pass
+        # If using light mode, print the preprocessed retrieval string for visibility
+        try:
+            if preproc_mode == "light":
+                print(f"[PREPROC - LIGHT] query_for_retrieval -> {question_for_retrieval}")
+        except Exception:
+            pass
+
         for retriever in retrievers:
             raw_scores[retriever.name] = retriever.get_scores(question_for_retrieval, pool_n, chunks)
         # TODO: Fix retrieval logging.
@@ -299,12 +327,18 @@ def run_chat_session(args: argparse.Namespace, cfg: QueryPlanConfig):
             rrf_k=int(cfg.rrf_k)
         )
         
-        # Package artifacts for reuse
+        # Build a small vocabulary for spell-correction (conservative) and package artifacts for reuse
+        try:
+            vocab = build_vocab_from_chunks(chunks)
+        except Exception:
+            vocab = None
+
         artifacts = {
             "chunks": chunks,
             "sources": sources,
             "retrievers": retrievers,
-            "ranker": ranker
+            "ranker": ranker,
+            "vocab": vocab
         }
     except Exception as e:
         print(f"ERROR: Failed to initialize chat artifacts: {e}")
