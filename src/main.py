@@ -27,6 +27,7 @@ from src.retriever import (
     load_artifacts
 )
 from src.ranking.reranker import rerank
+from src.ranking.chunk_selector import select_chunks
 
 ANSWER_NOT_FOUND = "I'm sorry, but I don't have enough information to answer that question."
 
@@ -152,6 +153,9 @@ def get_answer(
         # print(f"Corresponding scores: {scores[:cfg.top_k]}")
         topk_idxs = filter_retrieved_chunks(cfg, chunks, ordered)
         ranked_chunks = [chunks[i] for i in topk_idxs]
+        # Build text → chunk_idx map now, before reranking changes the order.
+        # Used by the chunk selector to recover embeddings from the FAISS index.
+        text_to_chunk_idx = {chunks[i]: i for i in topk_idxs}
         # print(f"Top-{cfg.top_k} chunk indices after filtering: {topk_idxs}")
         # print("Len Ranked chunks:", len(ranked_chunks))
         # print("Example ranked chunk content:", ranked_chunks[0] if ranked_chunks else "No chunks retrieved")
@@ -188,6 +192,18 @@ def get_answer(
 
         # Step 3: Final re-ranking
         ranked_chunks = rerank(question, ranked_chunks, mode=cfg.rerank_mode, top_n=cfg.rerank_top_k)
+
+        # Step 3.5: Budget-aware joint chunk selection
+        # Replaces fixed top-k with a set chosen jointly by relevance,
+        # redundancy penalty, and token cost under a fixed context budget.
+        if cfg.use_chunk_selector:
+            ranked_chunks = select_chunks(
+                ranked_chunks=ranked_chunks,
+                text_to_chunk_idx=text_to_chunk_idx,
+                faiss_index=artifacts["faiss_index"],
+                token_budget=cfg.token_budget,
+                lam=cfg.selector_lambda,
+            )
         # print("Reranked Chunks", type(ranked_chunks), len(ranked_chunks), type(ranked_chunks[0]) if ranked_chunks else "No chunks")
         # print("Example reranked chunk content:", ranked_chunks[0] if ranked_chunks else "No chunks after reranking")
 
@@ -293,7 +309,7 @@ def run_chat_session(args: argparse.Namespace, cfg: RAGConfig):
         
         ranker = EnsembleRanker(ensemble_method=cfg.ensemble_method, weights=cfg.ranker_weights, rrf_k=int(cfg.rrf_k))
         print("Loaded retrievers and initialized ranker.")
-        artifacts = {"chunks": chunks, "sources": sources, "retrievers": retrievers, "ranker": ranker, "meta": meta}
+        artifacts = {"chunks": chunks, "sources": sources, "retrievers": retrievers, "ranker": ranker, "meta": meta, "faiss_index": faiss_idx}
     except Exception as e:
         print(f"ERROR: {e}. Run 'index' mode first.")
         sys.exit(1)
