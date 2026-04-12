@@ -29,6 +29,11 @@ class RAGConfig:
     rerank_mode: str = ""
     rerank_top_k: int = 5
 
+    # context budget / joint chunk selection
+    use_chunk_selector: bool = False
+    token_budget: int = 2000
+    selector_lambda: float = 0.5
+
     # generation
     max_gen_tokens: int = 400
     gen_model: str = "models/qwen2.5-3b-instruct-q8_0.gguf"
