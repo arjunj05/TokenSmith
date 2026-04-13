@@ -191,6 +191,7 @@ def get_tokensmith_answer(question, config, golden_chunks=None):
     cfg = RAGConfig(
         chunk_mode=config.get("chunk_mode", "recursive_sections"),
         top_k=config.get("top_k", 10),
+        gen_model=config.get("model_path", "models/qwen2.5-1.5b-instruct-q5_k_m.gguf"),
         embed_model=config.get("embed_model"),
         ensemble_method=config.get("retrieval_method", "rrf"),
         rrf_k=60,
@@ -208,6 +209,9 @@ def get_tokensmith_answer(question, config, golden_chunks=None):
         use_indexed_chunks=config.get("use_indexed_chunks", False),
         extracted_index_path=config.get("extracted_index_path", "data/extracted_index.json"),
         page_to_chunk_map_path=config.get("page_to_chunk_map_path", "index/sections/textbook_index_page_to_chunk_map.json"),
+        use_chunk_selector=config.get("use_chunk_selector", False),
+        token_budget=config.get("token_budget", 2000),
+        selector_lambda=config.get("selector_lambda", 0.5),
     )
     
     # Print status
@@ -253,6 +257,7 @@ def get_tokensmith_answer(question, config, golden_chunks=None):
         "retrievers": retrievers,
         "ranker": ranker,
         "metadata": metadata,
+        "faiss_index": faiss_index,
     }
 
     result = get_answer(

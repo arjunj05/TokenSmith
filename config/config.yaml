@@ -1,22 +1,25 @@
-embed_model: "models/Qwen3-Embedding-4B-Q5_K_M.gguf"
-top_k: 10
-num_candidates: 50
-ensemble_method: "rrf"
-ranker_weights: {"faiss":1,"bm25":0,"index_keywords":0}
-rrf_k: 60
-max_gen_tokens: 400
-chunk_mode : "recursive_sections"
-gen_model: "models/qwen2.5-1.5b-instruct-q5_k_m.gguf"
-chunk_size: 2000
+chunk_mode: recursive_sections
 chunk_overlap: 200
-use_chunk_selector: false
-token_budget: 2000
-selector_lambda: 0.5
-use_hyde: false
-hyde_max_tokens: 300
-use_indexed_chunks: false
-rerank_mode: "cross_encoder"
-rerank_top_k: 5
-use_double_prompt: false
+chunk_size: 2000
+embed_model: models/Qwen3-Embedding-4B-Q5_K_M.gguf
 enable_history: true
+ensemble_method: rrf
+gen_model: models/qwen2.5-1.5b-instruct-q5_k_m.gguf
+hyde_max_tokens: 300
+max_gen_tokens: 400
 max_history_turns: 3
+num_candidates: 50
+ranker_weights:
+  bm25: 0
+  faiss: 1
+  index_keywords: 0
+rerank_mode: cross_encoder
+rerank_top_k: 5
+rrf_k: 60
+selector_lambda: 0.5
+token_budget: 2000
+top_k: 10
+use_chunk_selector: true
+use_double_prompt: false
+use_hyde: false
+use_indexed_chunks: false

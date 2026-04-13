@@ -177,6 +177,11 @@ def config(pytestconfig):
         # Query Enhancement (HyDE)
         "use_hyde": cfg.get("use_hyde", False),
         "hyde_max_tokens": cfg.get("hyde_max_tokens", 300),
+
+        # Chunk selector
+        "use_chunk_selector": cfg.get("use_chunk_selector", False),
+        "token_budget": cfg.get("token_budget", 2000),
+        "selector_lambda": cfg.get("selector_lambda", 0.5),
     }
 
     # Handle enable/disable chunks
