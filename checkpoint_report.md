@@ -1,6 +1,6 @@
 # CS6423 Project Checkpoint Report
 
-**GitHub Repository:** [INSERT LINK HERE]
+**GitHub Repository:** https://github.com/arjunj05/TokenSmith
 
 ---
 
@@ -49,3 +49,65 @@ The immediate next step is a sweep over the λ parameter — testing values like
 A second direction is tightening the token budget so the selector is forced to make real trade-offs. Currently most candidate sets fit within the budget without any cuts. Setting the budget to something like 1200–1500 tokens would require the selector to drop 1–2 chunks, making the comparison with the baseline more meaningful.
 
 Finally, the benchmark suite currently has 11 questions. Expanding this to cover more question types and difficulty levels would make the results more robust and better support conclusions about which question categories benefit most from budget-aware selection.
+
+---
+
+## Appendix: Learning Episode
+
+**Topic:** Transaction Serializability and Locking
+
+**Configuration:** top_k = 10, rerank_top_k = 5, use_chunk_selector = true, selector_lambda = 0.5, token_budget = 2000
+
+The chunks below are verbatim output from the retrieval pipeline. For each question the system ran FAISS retrieval → RRF ranking → cross-encoder reranking → budget-aware joint selection with λ = 0.5. The text shown is exactly what was passed to the LLM as context.
+
+This episode follows a natural study progression: starting from what serializability means, building toward how the precedence graph tests for it, then moving to how two-phase locking enforces it, and finishing with refinements that address real-world problems like cascading rollbacks and phantom reads.
+
+---
+
+**Question 1:** What does it mean for a schedule to be conflict serializable?
+
+**Top chunk selected (reranker score = 5.12, Chapter 18 §18.6 Validation-Based Protocols):**
+> The concept of view equivalence leads to the concept of view serializability. We say that a schedule S is view serializable if it is view equivalent to a serial schedule. As an illustration, suppose that we augment schedule 4 with transaction T29 and obtain the following view serializable (schedule 5): Indeed, schedule 5 is view equivalent to the serial schedule <T27, T28, T29>, since the one read(Q) instruction reads the initial value of Q in both schedules and T29 performs the final write of Q in both schedules. Every conflict-serializable schedule is also view serializable, but there are view-serializable schedules that are not conflict serializable. Indeed, schedule 5 is not conflict serializable, since every pair of consecutive instructions conflicts, and, thus, no swapping of instructions is possible. Page 868 Observe that, in schedule 5, transactions T28 and T29 perform write(Q) operations without having performed a read(Q) operation. Writes of this sort are called blind writes. Blind writes appear in any view-serializable schedule that is not conflict serializable. We determine the serializability order by the timestamp-ordering technique, using the value of the timestamp ValidationTS(Ti). Thus, the value TS(Ti) = ValidationTS(Ti) and, if TS(Tj) < TS(Tk), then any produced schedule must be equivalent to a serial schedule in which transaction Tj appears before transaction Tk.
+
+**Second chunk selected (reranker score = 3.54, Chapter 18 §18.1.1 Lock-Based Protocols / Locks):**
+> Locking protocols restrict the number of possible schedules. The set of all such schedules is a proper subset of all possible serializable schedules. We shall present several locking protocols that allow only conflict-serializable schedules, and thereby ensure isolation. Before doing so, we introduce some terminology. Let {T0, T1, ..., Tn} be a set of transactions participating in a schedule S. We say that Ti precedes Tj in S, written Ti → Tj, if there exists a data item Q such that Ti has held lock mode A on Q, and Tj has held lock mode B on Q later, and comp(A,B) = false. If Ti → Tj, then that precedence implies that in any equivalent serial schedule, Ti must appear before Tj. Observe that this graph is similar to the precedence graph that we used in Section 17.6 to test for conflict serializability. Conflicts between instructions correspond to noncompatibility of lock modes. We say that a schedule S is legal under a given locking protocol if S is a possible schedule for a set of transactions that follows the rules of the locking protocol. We say that a locking protocol ensures conflict serializability if and only if all legal schedules are conflict serializable; in other words, for all legal schedules the associated → relation is acyclic.
+
+*Note: The top-ranked chunk is the view serializability section, which discusses conflict serializability only by contrast rather than by definition. The second chunk contains the precedence-relation definition, which is closer to what the question asks but still approaches it from the locking angle. The direct definition of conflict serializability (two schedules are conflict equivalent if they can be transformed into each other by swapping non-conflicting operations) lives in a different section that did not rank in the top 5 after reranking.*
+
+---
+
+**Question 2:** How does the precedence graph test determine if a schedule is conflict serializable?
+
+**Top chunk selected (reranker score = 4.10, Chapter 18 §18.6 Validation-Based Protocols):**
+> The concept of view equivalence leads to the concept of view serializability. We say that a schedule S is view serializable if it is view equivalent to a serial schedule. As an illustration, suppose that we augment schedule 4 with transaction T29 and obtain the following view serializable (schedule 5): Indeed, schedule 5 is view equivalent to the serial schedule <T27, T28, T29>, since the one read(Q) instruction reads the initial value of Q in both schedules and T29 performs the final write of Q in both schedules. Every conflict-serializable schedule is also view serializable, but there are view-serializable schedules that are not conflict serializable. Indeed, schedule 5 is not conflict serializable, since every pair of consecutive instructions conflicts, and, thus, no swapping of instructions is possible. Page 868 Observe that, in schedule 5, transactions T28 and T29 perform write(Q) operations without having performed a read(Q) operation. Writes of this sort are called blind writes. Blind writes appear in any view-serializable schedule that is not conflict serializable.
+
+**Second chunk selected (reranker score = 1.87, Chapter 18 §18.1.1 Locks):**
+> Locking protocols restrict the number of possible schedules. The set of all such schedules is a proper subset of all possible serializable schedules. We shall present several locking protocols that allow only conflict-serializable schedules, and thereby ensure isolation. Before doing so, we introduce some terminology. Let {T0, T1, ..., Tn} be a set of transactions participating in a schedule S. We say that Ti precedes Tj in S, written Ti → Tj, if there exists a data item Q such that Ti has held lock mode A on Q, and Tj has held lock mode B on Q later, and comp(A,B) = false. If Ti → Tj, then that precedence implies that in any equivalent serial schedule, Ti must appear before Tj. Observe that this graph is similar to the precedence graph that we used in Section 17.6 to test for conflict serializability.
+
+*Note: Questions 1 and 2 retrieve identical top-2 chunks. This is a concrete example of the retrieval gap the project aims to study: two semantically distinct questions map to the same embedding neighborhood, so the system provides the same context regardless of which question is asked. The chunk describing how to build the precedence graph and check for cycles (the direct answer to Q2) did not rank in the top 5 after reranking.*
+
+---
+
+**Question 3:** What is the two-phase locking protocol and how does it guarantee serializability?
+
+**Top chunk selected (reranker score = 7.85, Chapter 18 §18.1.3 The Two-Phase Locking Protocol):**
+> One protocol that ensures serializability is the two-phase locking protocol. This protocol requires that each transaction issue lock and unlock requests in two phases: 1. Growing phase. A transaction may obtain locks, but may not release any lock. 2. Shrinking phase. A transaction may release locks, but may not obtain any new locks. Initially, a transaction is in the growing phase. The transaction acquires locks as needed. Once the transaction releases a lock, it enters the shrinking phase, and it can issue no more lock requests. For example, transactions T3 and T4 are two phase. On the other hand, transactions T1 and T2 are not two phase. Note that the unlock instructions do not need to appear at the end of the transaction. We can show that the two-phase locking protocol ensures conflict serializability. Consider any transaction. The point in the schedule where the transaction has obtained its final lock (the end of its growing phase) is called the lock point of the transaction. Now, transactions can be ordered according to their lock points — this ordering is, in fact, a serializability ordering for the transactions. Two-phase locking does not ensure freedom from deadlock. Observe that transactions T3 and T4 are two phase, but, in schedule 2 (Figure 18.7), they are deadlocked. Recall from Section 17.7.2 that, in addition to being serializable, schedules should be cascadeless. Cascading rollback may occur under two-phase locking. As an illustration, consider the partial schedule of Figure 18.8. Each transaction observes the two-phase locking protocol, but the failure of T5 after the read(A) step of T7 leads to cascading rollback of T6 and T7.
+
+---
+
+**Question 4:** What is strict two-phase locking and what problem does it solve compared to basic 2PL?
+
+**Top chunk selected (reranker score = 2.30, Chapter 18 §18.1.3 The Two-Phase Locking Protocol):**
+> Strict two-phase locking and rigorous two-phase locking (with lock conversions) are used extensively in commercial database systems. Page 844 A simple but widely used scheme automatically generates the appropriate lock and unlock instructions for a transaction, on the basis of read and write requests from the transaction: When a transaction Ti issues a read(Q) operation, the system issues a lock-S(Q) instruction followed by the read(Q) instruction. When Ti issues a write(Q) operation, the system checks to see whether Ti already holds a shared lock on Q. If it does, then the system issues an upgrade(Q) instruction, followed by the write(Q) instruction. Otherwise, the system issues a lock-X(Q) instruction, followed by the write(Q) instruction. All locks obtained by a transaction are unlocked after that transaction commits or aborts.
+
+**Second chunk selected (reranker score = 2.86, Chapter 18 §18.1.3 The Two-Phase Locking Protocol):**
+> Each transaction observes the two-phase locking protocol, but the failure of T5 after the read(A) step of T7 leads to cascading rollback of T6 and T7. Figure 18.8 Partial schedule under two-phase locking. Cascading rollbacks can be avoided by a modification of two-phase locking called the strict two-phase locking protocol. This protocol requires not only that locking be two phase, but also that all exclusive-mode locks taken by a transaction be held until that transaction commits. This requirement ensures that any data written by an uncommitted transaction are locked in exclusive mode until the transaction commits, preventing any other transaction from reading the data. Another variant of two-phase locking is the rigorous two-phase locking protocol, which requires that all locks be held until the transaction commits. We can easily verify that, with rigorous two-phase locking, transactions can be serialized in the order in which they commit.
+
+*Note: The selector placed the auto-lock-generation chunk (score 2.30) ahead of the cascading-rollback / strict 2PL chunk (score 2.86) despite the latter having a higher reranker score. Both chunks come from the same section of the textbook and have very high cosine similarity (~0.93). The λ=0.5 redundancy penalty discounted the second chunk heavily once the first was selected, and the combined selector score (relevance minus redundancy penalty, divided by token cost) ranked the first chunk slightly higher. The chunk that directly answers the question — defining strict 2PL and explaining cascading rollbacks — is the second chunk, not the first.*
+
+---
+
+**Question 5:** What is the phantom phenomenon in concurrent transactions and how does index-based locking prevent it?
+
+**Top chunk selected (reranker score = 7.27, Chapter 18 §18.10.2 Concurrency in Index Structures):**
+> The phantom phenomenon, where conflicts between a predicate read and an insert or update are not detected, can allow nonserializable executions to occur. The index-locking technique, which we saw in Section 18.4.3, prevents the phantom phenomenon by locking index leaf nodes in a two-phase manner. Instead of locking an entire index leaf node, some index concurrency-control schemes use key-value locking on individual key values, allowing other key values to be inserted or deleted from the same leaf. Key-value locking thus provides increased concurrency. Using key-value locking naïvely, however, would allow the phantom phenomenon to occur; to prevent the phantom phenomenon, the next-key locking technique is used. In this technique, every index lookup must lock not only the keys found within the range (or the single key, in case of a point lookup) but also the next-key value — that is, the key value just greater than the last key value that was within the range. Also, every insert must lock not only the value that is inserted, but also the next-key value. Thus, if a transaction attempts to insert a value that was within the range of the index lookup of another transaction, the two transactions would conflict on the key value next to the inserted key value. Similarly, deletes must also lock the next-key value to the value being deleted to ensure that conflicts with subsequent range lookups of other queries are detected.
