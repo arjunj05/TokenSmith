@@ -34,6 +34,10 @@ class RAGConfig:
     token_budget: int = 2000
     selector_lambda: float = 0.5
 
+    # fine-grained sub-chunk splitting
+    use_fine_chunks: bool = False
+    fine_chunk_size: int = 400
+
     # generation
     max_gen_tokens: int = 400
     gen_model: str = "models/qwen2.5-3b-instruct-q8_0.gguf"

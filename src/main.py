@@ -28,6 +28,7 @@ from src.retriever import (
 )
 from src.ranking.reranker import rerank
 from src.ranking.chunk_selector import select_chunks
+from src.ranking.sub_chunk_splitter import split_into_sub_chunks, order_u_shape
 
 ANSWER_NOT_FOUND = "I'm sorry, but I don't have enough information to answer that question."
 
@@ -190,12 +191,28 @@ def get_answer(
                     "index_rank": index_ranks.get(idx, 0),
                 })
 
+        # Step 2.5: Fine-grained sub-chunk splitting
+        # Each coarse chunk is split into smaller spans so the cross-encoder
+        # and selector can cherry-pick the most relevant sub-spans rather than
+        # passing entire padded chunks to the LLM.
+        if cfg.use_fine_chunks:
+            sub_chunks = []
+            for coarse in ranked_chunks:
+                sub_chunks.extend(split_into_sub_chunks(coarse, cfg.fine_chunk_size))
+            ranked_chunks = sub_chunks
+            # Sub-chunks are not stored in the FAISS index so there are no
+            # valid indices to reconstruct embeddings from.  Pass an empty map;
+            # the selector falls back to redundancy = 0 for every candidate,
+            # which is correct when selector_lambda = 1.0 (relevance-only).
+            text_to_chunk_idx = {}
+
         # Step 3: Final re-ranking
-        ranked_chunks = rerank(question, ranked_chunks, mode=cfg.rerank_mode, top_n=cfg.rerank_top_k)
+        # When using fine chunks, score all sub-chunks; otherwise limit to
+        # rerank_top_k as usual.
+        rerank_n = len(ranked_chunks) if cfg.use_fine_chunks else cfg.rerank_top_k
+        ranked_chunks = rerank(question, ranked_chunks, mode=cfg.rerank_mode, top_n=rerank_n)
 
         # Step 3.5: Budget-aware joint chunk selection
-        # Replaces fixed top-k with a set chosen jointly by relevance,
-        # redundancy penalty, and token cost under a fixed context budget.
         if cfg.use_chunk_selector:
             ranked_chunks = select_chunks(
                 ranked_chunks=ranked_chunks,
@@ -204,6 +221,12 @@ def get_answer(
                 token_budget=cfg.token_budget,
                 lam=cfg.selector_lambda,
             )
+
+        # Step 3.6: U-shape context ordering
+        # Place the highest-relevance sub-chunks at the edges of the context
+        # window to reduce the "lost in the middle" attention degradation.
+        if cfg.use_fine_chunks:
+            ranked_chunks = order_u_shape(ranked_chunks)
         # print("Reranked Chunks", type(ranked_chunks), len(ranked_chunks), type(ranked_chunks[0]) if ranked_chunks else "No chunks")
         # print("Example reranked chunk content:", ranked_chunks[0] if ranked_chunks else "No chunks after reranking")
 

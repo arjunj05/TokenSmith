@@ -16,10 +16,12 @@ ranker_weights:
 rerank_mode: cross_encoder
 rerank_top_k: 5
 rrf_k: 60
-selector_lambda: 0.5
+selector_lambda: 1.0
 token_budget: 2000
 top_k: 10
 use_chunk_selector: true
+use_fine_chunks: false
+fine_chunk_size: 400
 use_double_prompt: false
 use_hyde: false
 use_indexed_chunks: false
