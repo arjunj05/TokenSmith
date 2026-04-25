@@ -211,7 +211,9 @@ def get_tokensmith_answer(question, config, golden_chunks=None):
         page_to_chunk_map_path=config.get("page_to_chunk_map_path", "index/sections/textbook_index_page_to_chunk_map.json"),
         use_chunk_selector=config.get("use_chunk_selector", False),
         token_budget=config.get("token_budget", 2000),
-        selector_lambda=config.get("selector_lambda", 0.5),
+        selector_lambda=config.get("selector_lambda", 1.0),
+        use_fine_chunks=config.get("use_fine_chunks", False),
+        fine_chunk_size=config.get("fine_chunk_size", 400),
     )
     
     # Print status

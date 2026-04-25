@@ -181,7 +181,11 @@ def config(pytestconfig):
         # Chunk selector
         "use_chunk_selector": cfg.get("use_chunk_selector", False),
         "token_budget": cfg.get("token_budget", 2000),
-        "selector_lambda": cfg.get("selector_lambda", 0.5),
+        "selector_lambda": cfg.get("selector_lambda", 1.0),
+
+        # Fine-grained sub-chunk splitting
+        "use_fine_chunks": cfg.get("use_fine_chunks", False),
+        "fine_chunk_size": cfg.get("fine_chunk_size", 400),
     }
 
     # Handle enable/disable chunks
