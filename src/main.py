@@ -241,6 +241,19 @@ def get_answer(
         # window to reduce the "lost in the middle" attention degradation.
         if cfg.use_fine_chunks and cfg.use_u_shape:
             ranked_chunks = order_u_shape(ranked_chunks)
+
+        # Step 3.7: Strip repeated metadata prefix from sub-chunks before generation.
+        # The "Description: ... Content: " header is kept on sub-chunks so the
+        # cross-encoder has section context when scoring, but repeating it on
+        # every 400-char fragment confuses the LLM's template parsing.
+        if cfg.use_fine_chunks:
+            _CM = "Content: "
+            def _strip_prefix(chunk):
+                text = chunk[0] if isinstance(chunk, tuple) else chunk
+                if _CM in text:
+                    text = text[text.index(_CM) + len(_CM):]
+                return (text, chunk[1]) if isinstance(chunk, tuple) else text
+            ranked_chunks = [_strip_prefix(c) for c in ranked_chunks]
         # print("Reranked Chunks", type(ranked_chunks), len(ranked_chunks), type(ranked_chunks[0]) if ranked_chunks else "No chunks")
         # print("Example reranked chunk content:", ranked_chunks[0] if ranked_chunks else "No chunks after reranking")
 

@@ -135,6 +135,7 @@ def stream_llama_cpp(prompt: str, model_path: str, max_tokens: int, temperature:
         prompt,
         max_tokens=max_tokens,
         temperature=temperature,
+        repeat_penalty=1.15,
         stop=[ANSWER_END],
         stream=True,
     ):
@@ -147,6 +148,7 @@ def run_llama_cpp(prompt: str, model_path: str, max_tokens: int, temperature: fl
         prompt,
         max_tokens=max_tokens,
         temperature=temperature,
+        repeat_penalty=1.15,
         stop=[ANSWER_END]
     )
 

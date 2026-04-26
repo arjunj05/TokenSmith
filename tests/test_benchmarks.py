@@ -298,6 +298,8 @@ def clean_answer(text):
         "<|end|>",
         "<|endoftext|>",
         "<|im_end|>",
+        "<<<END>>>",
+        "<<<",  # model sometimes generates the partial end marker
     ]
     
     # Find the earliest end token

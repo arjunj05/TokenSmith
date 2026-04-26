@@ -7,7 +7,7 @@ ensemble_method: rrf
 fine_chunk_size: 400
 gen_model: models/qwen2.5-1.5b-instruct-q5_k_m.gguf
 hyde_max_tokens: 300
-max_gen_tokens: 400
+max_gen_tokens: 600
 max_history_turns: 3
 num_candidates: 50
 ranker_weights:
@@ -23,7 +23,6 @@ top_k: 10
 use_chunk_selector: true
 use_double_prompt: false
 use_fine_chunks: false
-fine_chunk_size: 400
-use_u_shape: false
 use_hyde: false
 use_indexed_chunks: false
+use_u_shape: false
