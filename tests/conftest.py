@@ -161,7 +161,7 @@ def config(pytestconfig):
         "output_mode": pytestconfig.getoption("--output-mode") or cfg.get("output_mode", "terminal"),
         
         # Models
-        "model_path": pytestconfig.getoption("--model-path") or cfg.get("model_path", "models/qwen2.5-3b-instruct-q8_0.gguf"),
+        "model_path": pytestconfig.getoption("--model-path") or cfg.get("model_path") or cfg.get("gen_model", "models/qwen2.5-1.5b-instruct-q5_k_m.gguf"),
         "embed_model": pytestconfig.getoption("--embed-model") or cfg.get("embed_model", os.path.join(Path(__file__).parent.parent, "models", "Qwen3-Embedding-4B-Q8_0.gguf")),
         
         # Generator
@@ -186,6 +186,7 @@ def config(pytestconfig):
         # Fine-grained sub-chunk splitting
         "use_fine_chunks": cfg.get("use_fine_chunks", False),
         "fine_chunk_size": cfg.get("fine_chunk_size", 400),
+        "use_u_shape": cfg.get("use_u_shape", False),
     }
 
     # Handle enable/disable chunks

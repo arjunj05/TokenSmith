@@ -214,6 +214,7 @@ def get_tokensmith_answer(question, config, golden_chunks=None):
         selector_lambda=config.get("selector_lambda", 1.0),
         use_fine_chunks=config.get("use_fine_chunks", False),
         fine_chunk_size=config.get("fine_chunk_size", 400),
+        use_u_shape=config.get("use_u_shape", False),
     )
     
     # Print status

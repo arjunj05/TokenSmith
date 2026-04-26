@@ -221,11 +221,25 @@ def get_answer(
                 token_budget=cfg.token_budget,
                 lam=cfg.selector_lambda,
             )
+        elif cfg.use_fine_chunks:
+            # No selector, but sub-chunks must still fit the token budget to
+            # avoid exceeding the model context window.  Greedily keep the
+            # top-ranked sub-chunks (already sorted by reranker score) until
+            # the budget is exhausted.
+            kept, budget = [], cfg.token_budget
+            for chunk in ranked_chunks:
+                text = chunk[0] if isinstance(chunk, tuple) else chunk
+                cost = max(1, len(text) // 4)
+                if cost > budget:
+                    break
+                kept.append(chunk)
+                budget -= cost
+            ranked_chunks = kept
 
         # Step 3.6: U-shape context ordering
         # Place the highest-relevance sub-chunks at the edges of the context
         # window to reduce the "lost in the middle" attention degradation.
-        if cfg.use_fine_chunks:
+        if cfg.use_fine_chunks and cfg.use_u_shape:
             ranked_chunks = order_u_shape(ranked_chunks)
         # print("Reranked Chunks", type(ranked_chunks), len(ranked_chunks), type(ranked_chunks[0]) if ranked_chunks else "No chunks")
         # print("Example reranked chunk content:", ranked_chunks[0] if ranked_chunks else "No chunks after reranking")

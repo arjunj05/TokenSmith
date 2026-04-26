@@ -37,6 +37,7 @@ class RAGConfig:
     # fine-grained sub-chunk splitting
     use_fine_chunks: bool = False
     fine_chunk_size: int = 400
+    use_u_shape: bool = False
 
     # generation
     max_gen_tokens: int = 400

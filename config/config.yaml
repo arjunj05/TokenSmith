@@ -4,6 +4,7 @@ chunk_size: 2000
 embed_model: models/Qwen3-Embedding-4B-Q5_K_M.gguf
 enable_history: true
 ensemble_method: rrf
+fine_chunk_size: 400
 gen_model: models/qwen2.5-1.5b-instruct-q5_k_m.gguf
 hyde_max_tokens: 300
 max_gen_tokens: 400
@@ -20,8 +21,9 @@ selector_lambda: 1.0
 token_budget: 2000
 top_k: 10
 use_chunk_selector: true
+use_double_prompt: false
 use_fine_chunks: false
 fine_chunk_size: 400
-use_double_prompt: false
+use_u_shape: false
 use_hyde: false
 use_indexed_chunks: false
